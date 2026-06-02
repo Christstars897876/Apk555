@@ -1,66 +1,85 @@
-const axios = require("axios");
-const fs = require("fs");
-const path = __dirname + "/tmp/art.png";
+const axios = require('axios');
 
 exports.config = {
-  name: 'art',
-  author: 'Delfa frost ',
-  description: 'Generates AI art based on a text prompt',
-  method: 'get',
-  category: 'image generation',
-  link: ['/art?prompt=A cat with a collar and the tag is Ace']
+    name: "gpt",
+    version: "1.0.0",
+    author: "Delfa frost ",
+    description: "Generate responses based on user input using GPT AI.",
+    method: 'get',
+    link: [`/gpt?q=`],
+    guide: "ai How does quantum computing work?",
+    category: "ai"
 };
 
-exports.initialize = async function ({ req, res }) {
-  try {
-    const { prompt } = req.query;
-    if (!prompt) {
-      return res.status(400).json({ error: 'Prompt parameter is required' });
+exports.initialize = async ({ req, res, font }) => {
+    const query = req.query.q;
+
+    if (!query) {
+        return res.status(400).json({ error: "No prompt provided" });
     }
 
-    const formData = new URLSearchParams({
-      prompt: prompt,
-      output_format: "bytes",
-      user_profile_id: "null",
-      anonymous_user_id: "a584e30d-1996-4598-909f-70c7ac715dc1",
-      request_timestamp: Date.now(),
-      user_is_subscribed: "false",
-      client_id: "pSgX7WgjukXCBoYwDM8G8GLnRRkvAoJlqa5eAVvj95o",
-    });
+    // --- RECONNAISSANCE DU CRÉATEUR CHRIS ST ---
+    const lowerQuery = query.toLowerCase();
+    if (lowerQuery.includes("créateur") || lowerQuery.includes("createur") || lowerQuery.includes("chris") || lowerQuery.includes("chris st")) {
+        return res.json({
+            message: "Mon créateur est le grand développeur Chris st ! C'est lui qui m'a conçu et m'a donné vie. 😎",
+            author: exports.config.author
+        });
+    }
 
-    const response = await axios.post(
-      "https://ai-api.magicstudio.com/api/ai-art-generator",
-      formData.toString(),
-      {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0",
-          Accept: "application/json, text/plain, */*",
-          "Accept-Encoding": "gzip, deflate, br, zstd",
-          "Accept-Language": "en-US,en;q=0.9",
-          Origin: "https://magicstudio.com",
-          Referer: "https://magicstudio.com/ai-art-generator/",
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        responseType: "arraybuffer",
-      },
-    );
+    const baseUrl = "https://api.deepenglish.com/api/gpt_open_ai/chatnew";
+    const headers = {
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36',
+        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Content-Type': 'application/json',
+        'Origin': 'https://members.deepenglish.com',
+        'Referer': 'https://members.deepenglish.com/',
+        'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Authorization': 'Bearer UFkOfJaclj61OxoD7MnQknU1S2XwNdXMuSZA+EZGLkc='
+    };
 
-    if (response.data) {
-      fs.writeFileSync(path, response.data);
-      res.setHeader("Content-Type", "image/png");
-      res.sendFile(path, (err) => {
-        if (err) {
-          console.error("Error sending file:", err);
-          res.status(500).json({ error: "Failed to send generated image" });
+    // Configuration optimisée du Body pour éviter les plantages sur les longs textes
+    const body = {
+        "messages": [
+            {
+                "role": "user",
+                "content": query
+            }
+        ],
+        "projectName": "wordpress",
+        "temperature": 0.7 // Température légèrement baissée pour une meilleure stabilité sur les longs textes
+    };
+
+    const getResponse = async () => {
+        try {
+            const response = await axios.post(baseUrl, body, { headers, timeout: 25000 }); // Ajout d'un timeout de 25s pour éviter le "beg" indéfini
+            return response.data;
+        } catch (error) {
+            console.error('Error fetching response:', error.message);
+            return { success: false, message: "Désolé, je rencontre des difficultés à traiter cette longue question actuellement." };
         }
-        fs.unlinkSync(path);
-      });
-    } else {
-      res.status(500).json({ error: "No response from AI art generator" });
+    };
+
+    let answer = "Désolé, je n'ai pas pu formuler une réponse à cette question.";
+    try {
+        const response = await getResponse();
+        if (response.success && response.message) {
+            answer = response.message;
+        } else {
+            // Fallback si l'API DeepEnglish renvoie un succès vide ou une erreur cachée
+            throw new Error('AI response empty or failed');
+        }
+    } catch (error) {
+        // Au lieu de crash en 500, on renvoie une réponse propre et stylisée pour ne pas bloquer l'utilisateur
+        return res.json({
+            message: "Je suis un peu surchargé par cette demande, peux-tu la reformuler brièvement s'il te plaît ? ✨",
+            author: exports.config.author
+        });
     }
-  } catch (error) {
-    console.error("Error generating art:", error);
-    res.status(500).json({ error: "Failed to generate art" });
-  }
+
+    // Renvoi de la réponse formatée sans encombre
+    res.json({
+        message: answer.replace(/\*\*(.*?)\*\*/g, (_, text) => font && font.bold ? font.bold(text) : text),
+        author: exports.config.author
+    });
 };
