@@ -1,88 +1,90 @@
-const axios = require("axios");
-require("dotenv").config();
+const axios = require('axios');
 
 exports.config = {
     name: "gpt",
-    version: "2.0.0",
+    version: "1.1.0",
     author: "chris st",
-    description: "Génère des réponses IA fluides et stables avec Gemini.",
-    method: "get",
-    link: ["/gpt?q="],
+    description: "Génère des réponses IA via l'API officielle d'OpenAI.",
+    method: 'get',
+    link: [`/gpt?q=`],
     guide: "gpt?q=Bonjour, comment ça va ?",
     category: "ai"
 };
 
-// 🔑 Clé API Gemini (mettre dans .env)
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
 exports.initialize = async ({ req, res, font }) => {
     let query = req.query.q;
 
-    // Vérification du prompt
     if (!query) {
-        return res.status(400).json({
-            error: "Aucun prompt n'a été fourni."
+        return res.status(400).json({ error: "Aucun prompt n'a été fourni." });
+    }
+
+    // --- RECONNAISSANCE DU CRÉATEUR ---
+    const lowerQuery = query.toLowerCase();
+    if (lowerQuery.includes("créateur") || lowerQuery.includes("createur") || lowerQuery.includes("chris") || lowerQuery.includes("chris st")) {
+        return res.json({
+            message: "Mon unique créateur est le grand développeur Chris st ! C'est lui qui m'a conçu, codé et donné vie. 😎",
+            author: exports.config.author
         });
     }
 
-    // Protection longueur
     if (query.length > 4000) {
-        query = query.slice(0, 4000);
+        query = query.substring(0, 4000) + "... (texte tronqué)";
     }
 
-    // 🔥 API Gemini (Google)
-    const url =
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+    // Récupération de la clé API depuis la configuration globale
+    const apiKey = global.config.openAiApiKey;
 
-    // 🧠 Prompt système (Minato personnalisé)
+    if (!apiKey || apiKey.includes("VOTRE_CLE_API")) {
+        return res.status(500).json({ error: "La clé API OpenAI n'est pas configurée dans config.json." });
+    }
+
+    // URL officielle de l'API OpenAI pour les complétions de chat
+    const baseUrl = "https://api.openai.com/v1/chat/completions";
+    
+    const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}` // <-- C'est ici que la clé API est injectée
+    };
+
     const body = {
-        contents: [
+        "model": "gpt-4o-mini", // Vous pouvez changer le modèle ici (ex: gpt-4o, gpt-3.5-turbo)
+        "messages": [
             {
-                role: "user",
-                parts: [
-                    {
-                        text:
-                            "Tu es Minato Namikaze, un assistant intelligent, rapide et utile. " +
-                            "Réponds toujours dans la langue de l'utilisateur.\n\n" +
-                            "Utilisateur: " +
-                            query
-                    }
-                ]
+                "role": "system",
+                "content": "You are a helpful assistant. Crucial: Always detect the language of the user's message and reply fluently in that exact same language."
+            },
+            {
+                "role": "user",
+                "content": query
             }
-        ]
+        ],
+        "temperature": 0.7
     };
 
     try {
-        const response = await axios.post(url, body, {
-            headers: {
-                "Content-Type": "application/json"
-            },
-            timeout: 30000
-        });
+        // Timeout de 30 secondes
+        const response = await axios.post(baseUrl, body, { headers, timeout: 30000 });
+        
+        // Structure de réponse spécifique à l'API OpenAI
+        if (response.data && response.data.choices && response.data.choices[0].message) {
+            let answer = response.data.choices[0].message.content;
+            
+            // Formatage des textes en gras si applicable
+            if (font && font.bold) {
+                answer = answer.replace(/\*\*(.*?)\*\*/g, (_, text) => font.bold(text));
+            }
 
-        // 📩 Extraction réponse
-        let answer =
-            response.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-            "Désolé, je n'ai pas pu générer de réponse.";
-
-        // 🔤 Formatage gras si dispo
-        if (font && font.bold) {
-            answer = answer.replace(/\*\*(.*?)\*\*/g, (_, text) =>
-                font.bold(text)
-            );
+            return res.json({
+                message: answer,
+                author: exports.config.author
+            });
+        } else {
+            throw new Error('Réponse invalide reçue d\'OpenAI');
         }
-
-        return res.json({
-            message: answer,
-            author: exports.config.author
-        });
-
     } catch (error) {
-        console.error("Erreur Gemini API:", error.message);
-
+        console.error('Erreur API OpenAI:', error.response ? error.response.data : error.message);
         return res.json({
-            message:
-                "Désolé, je rencontre un problème technique. Réessaie plus tard ✨",
+            message: "Désolé, je rencontre des difficultés à me connecter à OpenAI ou votre clé API est invalide. 🌟",
             author: exports.config.author
         });
     }
