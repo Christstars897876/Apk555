@@ -1,9 +1,21 @@
 {
-  "name": "Delfa frost",
+  "name": "chris st",
   "version": "Dashboard",
-  "port": 3000,
-  "openAiApiKey": "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",
+  "description": "Simple and Easy-to-Use API Documentation",
+  "header": {
+    "status": "Online!"
+  },
   "apiSettings": {
-    "creator": "Delfa frost"
-  }
+    "creator": "chris st"
+  },
+  "notifications": [
+    {
+      "title": "Welcome to API Dashboard",
+      "message": "Explore our APIs and integrate them into your projects."
+    },
+    {
+      "title": "New Feature",
+      "message": "We've added support for WebSocket APIs. Check them out!"
+    }
+  ]
 }
