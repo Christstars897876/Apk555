@@ -2,7 +2,7 @@
   "name": "Delfa frost",
   "version": "Dashboard",
   "port": 3000,
-  "openAiApiKey": "sk-proj-VOTRE_CLE_API_OPENAI_ICI",
+  "openAiApiKey": "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",
   "apiSettings": {
     "creator": "Delfa frost"
   }
