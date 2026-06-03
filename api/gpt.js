@@ -1,98 +1,88 @@
-const axios = require('axios');
+const axios = require("axios");
+require("dotenv").config();
 
 exports.config = {
     name: "gpt",
-    version: "1.1.0",
+    version: "2.0.0",
     author: "chris st",
-    description: "Génère des réponses IA fluides s'adaptant à la langue de l'utilisateur.",
-    method: 'get',
-    link: [`/gpt?q=`],
+    description: "Génère des réponses IA fluides et stables avec Gemini.",
+    method: "get",
+    link: ["/gpt?q="],
     guide: "gpt?q=Bonjour, comment ça va ?",
     category: "ai"
 };
 
+// 🔑 Clé API Gemini (mettre dans .env)
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
 exports.initialize = async ({ req, res, font }) => {
     let query = req.query.q;
 
+    // Vérification du prompt
     if (!query) {
-        return res.status(400).json({ error: "Aucun prompt n'a été fourni." });
-    }
-
-    // --- RECONNAISSANCE DU CRÉATEUR CHRIS ST ---
-    const lowerQuery = query.toLowerCase();
-    if (lowerQuery.includes("créateur") || lowerQuery.includes("createur") || lowerQuery.includes("chris") || lowerQuery.includes("chris st")) {
-        return res.json({
-            message: "Mon unique créateur est le grand développeur Chris st ! C'est lui qui m'a conçu, codé et donné vie. 😎",
-            author: exports.config.author
+        return res.status(400).json({
+            error: "Aucun prompt n'a été fourni."
         });
     }
 
-    // Protection anti-bug : Si le texte est excessivement long (ex: copier-coller de logs), 
-    // on le coupe proprement pour éviter de saturer ou faire planter l'API externe.
+    // Protection longueur
     if (query.length > 4000) {
-        query = query.substring(0, 4000) + "... (texte tronqué pour des raisons de performance)";
+        query = query.slice(0, 4000);
     }
 
-    const baseUrl = "https://api.deepenglish.com/api/gpt_open_ai/chatnew";
-    const headers = {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36',
-        'Accept-Encoding': 'gzip, deflate, br, zstd',
-        'Content-Type': 'application/json',
-        'Origin': 'https://members.deepenglish.com',
-        'Referer': 'https://members.deepenglish.com/',
-        'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Authorization': 'Bearer UFkOfJaclj61OxoD7MnQknU1S2XwNdXMuSZA+EZGLkc='
-    };
+    // 🔥 API Gemini (Google)
+    const url =
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-    // Configuration du Body : On force l'IA à détecter et répondre dans la langue de l'utilisateur
+    // 🧠 Prompt système (Minato personnalisé)
     const body = {
-        "messages": [
+        contents: [
             {
-                "role": "system",
-                "content": "You are a helpful assistant. Crucial: Always detect the language of the user's message and reply fluently in that exact same language (e.g., if the user writes in French, reply in French. If in Spanish, reply in Spanish). Never state that you are an English-only AI."
-            },
-            {
-                "role": "user",
-                "content": query
+                role: "user",
+                parts: [
+                    {
+                        text:
+                            "Tu es Minato Namikaze, un assistant intelligent, rapide et utile. " +
+                            "Réponds toujours dans la langue de l'utilisateur.\n\n" +
+                            "Utilisateur: " +
+                            query
+                    }
+                ]
             }
-        ],
-        "projectName": "wordpress",
-        "temperature": 0.7
-    };
-
-    const getResponse = async () => {
-        try {
-            // Timeout de 30 secondes pour les longues requêtes complexes (histoires, codes)
-            const response = await axios.post(baseUrl, body, { headers, timeout: 30000 });
-            return response.data;
-        } catch (error) {
-            console.error('Erreur API GPT:', error.message);
-            return { success: false, message: null };
-        }
+        ]
     };
 
     try {
-        const response = await getResponse();
-        
-        if (response && response.success && response.message) {
-            let answer = response.message;
-            
-            // Formatage des textes en gras si applicable
-            if (font && font.bold) {
-                answer = answer.replace(/\*\*(.*?)\*\*/g, (_, text) => font.bold(text));
-            }
+        const response = await axios.post(url, body, {
+            headers: {
+                "Content-Type": "application/json"
+            },
+            timeout: 30000
+        });
 
-            return res.json({
-                message: answer,
-                author: exports.config.author
-            });
-        } else {
-            throw new Error('Réponse invalide ou vide reçue de l\'API externe');
+        // 📩 Extraction réponse
+        let answer =
+            response.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+            "Désolé, je n'ai pas pu générer de réponse.";
+
+        // 🔤 Formatage gras si dispo
+        if (font && font.bold) {
+            answer = answer.replace(/\*\*(.*?)\*\*/g, (_, text) =>
+                font.bold(text)
+            );
         }
-    } catch (error) {
-        // Fallback sécurisé en cas de surcharge : évite que votre bot crash ou reste muet
+
         return res.json({
-            message: "Désolé, je rencontre une petite surcharge ou le message est trop complexe à traiter. Peux-tu reformuler ou réessayer ? ✨",
+            message: answer,
+            author: exports.config.author
+        });
+
+    } catch (error) {
+        console.error("Erreur Gemini API:", error.message);
+
+        return res.json({
+            message:
+                "Désolé, je rencontre un problème technique. Réessaie plus tard ✨",
             author: exports.config.author
         });
     }
