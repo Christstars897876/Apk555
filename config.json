@@ -1,21 +1,9 @@
 {
   "name": "Delfa frost",
   "version": "Dashboard",
-  "description": "Simple and Easy-to-Use API Documentation",
-  "header": {
-    "status": "Online!"
-  },
+  "port": 3000,
+  "openAiApiKey": "sk-proj-VOTRE_CLE_API_OPENAI_ICI",
   "apiSettings": {
     "creator": "Delfa frost"
-  },
-  "notifications": [
-    {
-      "title": "Welcome to API Dashboard",
-      "message": "Explore our APIs and integrate them into your projects."
-    },
-    {
-      "title": "New Feature",
-      "message": "We've added support for WebSocket APIs. Check them out!"
-    }
-  ]
+  }
 }
