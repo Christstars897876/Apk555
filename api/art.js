@@ -1,10 +1,10 @@
 const axios = require("axios");
 const fs = require("fs");
-const path = __dirname + "/tmp/art.png";
+const path = require("path");
 
 exports.config = {
   name: 'art',
-  author: 'Delfa frost ',
+  author: 'Delfa frost',
   description: 'Generates AI art based on a text prompt',
   method: 'get',
   category: 'image generation',
@@ -12,6 +12,17 @@ exports.config = {
 };
 
 exports.initialize = async function ({ req, res }) {
+  // Définition du dossier temporaire
+  const tmpDir = path.join(__dirname, "tmp");
+  
+  // Crée le dossier 'tmp' s'il n'existe pas pour éviter le crash
+  if (!fs.existsSync(tmpDir)) {
+    fs.mkdirSync(tmpDir, { recursive: true });
+  }
+
+  // Génère un nom de fichier unique basé sur le temps pour éviter les conflits entre utilisateurs
+  const filePath = path.join(tmpDir, `art_${Date.now()}.png`);
+
   try {
     const { prompt } = req.query;
     if (!prompt) {
@@ -43,24 +54,41 @@ exports.initialize = async function ({ req, res }) {
           "Content-Type": "application/x-www-form-urlencoded",
         },
         responseType: "arraybuffer",
+        timeout: 60000 // Ajout d'un timeout de 60s au cas où l'API est lente
       },
     );
 
-    if (response.data) {
-      fs.writeFileSync(path, response.data);
-      res.setHeader("Content-Type", "image/png");
-      res.sendFile(path, (err) => {
+    if (response.data && response.data.byteLength > 0) {
+      // Écrit les données reçues dans le fichier unique
+      fs.writeFileSync(filePath, response.data);
+      
+      // Envoie le fichier à l'utilisateur
+      res.sendFile(filePath, (err) => {
+        // La suppression du fichier se fait à l'intérieur du callback de res.sendFile
+        // pour s'assurer que le fichier ne soit supprimé QU'APRÈS avoir été envoyé au bot.
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+
         if (err) {
           console.error("Error sending file:", err);
-          res.status(500).json({ error: "Failed to send generated image" });
+          // Si les en-têtes n'ont pas encore été envoyés, on renvoie une erreur
+          if (!res.headersSent) {
+            return res.status(500).json({ error: "Failed to send generated image" });
+          }
         }
-        fs.unlinkSync(path);
       });
     } else {
-      res.status(500).json({ error: "No response from AI art generator" });
+      res.status(500).json({ error: "No response or empty data from AI art generator" });
     }
   } catch (error) {
-    console.error("Error generating art:", error);
-    res.status(500).json({ error: "Failed to generate art" });
+    console.error("Error generating art:", error.message);
+    
+    // Nettoyage de sécurité en cas d'erreur durant l'appel API
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    res.status(500).json({ error: "Failed to generate art. External API might be down or rate-limited." });
   }
 };
